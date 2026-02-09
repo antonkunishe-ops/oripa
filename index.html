@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>オリパ抽選</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, sans-serif; background:#f7f7f7; }
+    .box { max-width:420px; margin:40px auto; background:#fff; padding:20px; border-radius:16px; }
+    button { width:100%; padding:16px; font-size:18px; border-radius:12px; border:none; background:#ffcb05; cursor:pointer; }
+    .result { margin-top:16px; padding:16px; background:#eee; border-radius:12px; text-align:center; font-size:18px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>ポケモン オリパ</h2>
+    <button id="draw">オリパを引く！</button>
+    <div id="result" class="result">結果がここに出ます</div>
+  </div>
+
+  <script>
+    const prizes = [
+      { name: "SS賞：激レア", w: 1 },
+      { name: "S賞：レア", w: 5 },
+      { name: "A賞：当たり", w: 20 },
+      { name: "ハズレ", w: 74 }
+    ];
+
+    function draw() {
+      const total = prizes.reduce((s,p)=>s+p.w,0);
+      let r = Math.random()*total;
+      for (const p of prizes) {
+        r -= p.w;
+        if (r < 0) return p.name;
+      }
+    }
+
+    document.getElementById("draw").onclick = () => {
+      document.getElementById("result").textContent = "抽選中…";
+      setTimeout(()=>{
+        document.getElementById("result").textContent = draw();
+      }, 1000);
+    };
+  </script>
+</body>
+</html>
