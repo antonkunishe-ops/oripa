@@ -7,31 +7,58 @@
   <style>
     body { font-family: system-ui, sans-serif; background:#f7f7f7; }
     .box { max-width:420px; margin:40px auto; background:#fff; padding:20px; border-radius:16px; }
-    h2 { text-align:center; }
+    h2 { text-align:center; margin:6px 0 14px; }
     button {
       width:100%;
       padding:16px;
       font-size:18px;
-      border-radius:12px;
+      border-radius:14px;
       border:none;
       background:#ffcb05;
       cursor:pointer;
     }
+    button:disabled { opacity:.7; cursor:not-allowed; }
+
     .result {
       margin-top:16px;
-      padding:16px;
+      padding:18px 16px;
       background:#eee;
-      border-radius:12px;
+      border-radius:14px;
       text-align:center;
       font-size:18px;
-      min-height:48px;
+      min-height:56px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
     }
-    .note {
-      margin-top:10px;
-      font-size:12px;
-      color:#666;
-      text-align:center;
+
+    /* ドキドキ演出：点滅＋ブルブル */
+    .rolling {
+      background: #111 !important;
+      color:#fff;
+      animation: pulse 0.35s infinite alternate, shake 0.12s infinite;
     }
+    @keyframes pulse {
+      from { filter: brightness(1); transform: scale(1); }
+      to   { filter: brightness(1.2); transform: scale(1.02); }
+    }
+    @keyframes shake {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(-2px); }
+      50% { transform: translateX(2px); }
+      75% { transform: translateX(-2px); }
+      100% { transform: translateX(0); }
+    }
+
+    /* 当選演出 */
+    .ss { background: #fff3c4 !important; border: 2px solid #e6b800; }
+    .s  { background: #e8f4ff !important; border: 2px solid #4aa3ff; }
+    .a  { background: #eaffea !important; border: 2px solid #3bd13b; }
+    .lose { background:#eee !important; border: 2px solid transparent; }
+
+    .note { margin-top:10px; font-size:12px; color:#666; text-align:center; }
+    .small { font-size:14px; opacity:.9; }
   </style>
 </head>
 <body>
@@ -40,7 +67,7 @@
 
     <button id="draw">オリパを引く！</button>
 
-    <div id="result" class="result">結果がここに表示されます</div>
+    <div id="result" class="result lose">結果がここに表示されます</div>
 
     <div class="note">※ デモ用（結果表示のみ）</div>
   </div>
@@ -48,10 +75,10 @@
   <script>
     // ===== 確率設定（％管理・合計100）=====
     const prizes = [
-      { name: "SS賞：激レア", w: 1 },   // 1%
-      { name: "S賞：レア",   w: 4 },   // 4%
-      { name: "A賞：当たり", w: 15 },  // 15%
-      { name: "ハズレ",      w: 80 }   // 80%
+      { key: "ss", name: "SS賞：激レア", w: 1 },   // 1%
+      { key: "s",  name: "S賞：レア",   w: 4 },   // 4%
+      { key: "a",  name: "A賞：当たり", w: 15 },  // 15%
+      { key: "lose", name: "ハズレ",    w: 80 }   // 80%
     ];
 
     function drawPrize() {
@@ -59,23 +86,92 @@
       let r = Math.random() * total;
       for (const p of prizes) {
         r -= p.w;
-        if (r < 0) return p.name;
+        if (r < 0) return p;
       }
-      return prizes[prizes.length - 1].name;
+      return prizes[prizes.length - 1];
+    }
+
+    // ===== 効果音（WebAudio / 外部ファイルなし）=====
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+
+    function beep(freq, durMs, type="sine", gain=0.08) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = gain;
+      o.connect(g); g.connect(ctx.destination);
+      o.start();
+      o.stop(ctx.currentTime + durMs / 1000);
+    }
+
+    // ドキドキ中の「ピッ」(短い)
+    function tickSound() {
+      beep(880, 70, "square", 0.05);
+    }
+
+    // 結果音（賞で変える）
+    function resultSound(key) {
+      if (key === "ss") { // キラキラ
+        beep(880, 120, "sine", 0.08);
+        setTimeout(()=>beep(1320, 140, "sine", 0.08), 120);
+        setTimeout(()=>beep(1760, 180, "sine", 0.08), 260);
+      } else if (key === "s") {
+        beep(660, 140, "triangle", 0.07);
+        setTimeout(()=>beep(990, 170, "triangle", 0.07), 140);
+      } else if (key === "a") {
+        beep(523, 140, "sine", 0.06);
+        setTimeout(()=>beep(784, 160, "sine", 0.06), 140);
+      } else { // ハズレ
+        beep(220, 220, "sawtooth", 0.04);
+      }
+    }
+
+    function setResultClass(key) {
+      result.classList.remove("ss","s","a","lose","rolling");
+      result.classList.add(key);
     }
 
     const btn = document.getElementById("draw");
     const result = document.getElementById("result");
 
-    btn.onclick = () => {
+    btn.onclick = async () => {
+      // ユーザー操作でAudioContextを有効化（これがないと鳴らないことがある）
+      if (ctx.state !== "running") await ctx.resume();
+
       btn.disabled = true;
+
+      // ドキドキ演出：数回ランダム表示
+      result.classList.remove("ss","s","a","lose");
+      result.classList.add("rolling");
       result.textContent = "抽選中…";
+
+      const rollTexts = ["ドキドキ…", "まだ…", "いくよ…", "おーぷん！", "……！"];
+      let i = 0;
+      const interval = setInterval(() => {
+        // テキストを切り替える
+        result.innerHTML = `<span class="small">${rollTexts[i % rollTexts.length]}</span>`;
+        tickSound();
+        i++;
+      }, 220);
+
+      // 抽選時間（ここで演出の長さ調整）
+      const DURATION_MS = 1800;
       setTimeout(() => {
-        result.textContent = drawPrize();
+        clearInterval(interval);
+
+        const p = drawPrize();
+        result.classList.remove("rolling");
+        setResultClass(p.key);
+        result.textContent = p.name;
+
+        resultSound(p.key);
         btn.disabled = false;
-      }, 1000);
+      }, DURATION_MS);
     };
   </script>
 </body>
 </html>
+
 
