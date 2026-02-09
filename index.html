@@ -7,40 +7,75 @@
   <style>
     body { font-family: system-ui, sans-serif; background:#f7f7f7; }
     .box { max-width:420px; margin:40px auto; background:#fff; padding:20px; border-radius:16px; }
-    button { width:100%; padding:16px; font-size:18px; border-radius:12px; border:none; background:#ffcb05; cursor:pointer; }
-    .result { margin-top:16px; padding:16px; background:#eee; border-radius:12px; text-align:center; font-size:18px; }
+    h2 { text-align:center; }
+    button {
+      width:100%;
+      padding:16px;
+      font-size:18px;
+      border-radius:12px;
+      border:none;
+      background:#ffcb05;
+      cursor:pointer;
+    }
+    .result {
+      margin-top:16px;
+      padding:16px;
+      background:#eee;
+      border-radius:12px;
+      text-align:center;
+      font-size:18px;
+      min-height:48px;
+    }
+    .note {
+      margin-top:10px;
+      font-size:12px;
+      color:#666;
+      text-align:center;
+    }
   </style>
 </head>
 <body>
   <div class="box">
     <h2>ポケモン オリパ</h2>
+
     <button id="draw">オリパを引く！</button>
-    <div id="result" class="result">結果がここに出ます</div>
+
+    <div id="result" class="result">結果がここに表示されます</div>
+
+    <div class="note">※ デモ用（結果表示のみ）</div>
   </div>
 
   <script>
+    // ===== 確率設定（％管理・合計100）=====
     const prizes = [
-      { name: "SS賞：激レア", w: 1 },
-      { name: "S賞：レア", w: 5 },
-      { name: "A賞：当たり", w: 20 },
-      { name: "ハズレ", w: 74 }
+      { name: "SS賞：激レア", w: 1 },   // 1%
+      { name: "S賞：レア",   w: 4 },   // 4%
+      { name: "A賞：当たり", w: 15 },  // 15%
+      { name: "ハズレ",      w: 80 }   // 80%
     ];
 
-    function draw() {
-      const total = prizes.reduce((s,p)=>s+p.w,0);
-      let r = Math.random()*total;
+    function drawPrize() {
+      const total = prizes.reduce((sum, p) => sum + p.w, 0);
+      let r = Math.random() * total;
       for (const p of prizes) {
         r -= p.w;
         if (r < 0) return p.name;
       }
+      return prizes[prizes.length - 1].name;
     }
 
-    document.getElementById("draw").onclick = () => {
-      document.getElementById("result").textContent = "抽選中…";
-      setTimeout(()=>{
-        document.getElementById("result").textContent = draw();
+    const btn = document.getElementById("draw");
+    const result = document.getElementById("result");
+
+    btn.onclick = () => {
+      btn.disabled = true;
+      result.textContent = "抽選中…";
+      setTimeout(() => {
+        result.textContent = drawPrize();
+        btn.disabled = false;
       }, 1000);
     };
   </script>
 </body>
 </html>
+
