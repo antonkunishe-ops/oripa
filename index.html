@@ -1,177 +1,441 @@
-<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <title>オリパ抽選</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: system-ui, sans-serif; background:#f7f7f7; }
-    .box { max-width:420px; margin:40px auto; background:#fff; padding:20px; border-radius:16px; }
-    h2 { text-align:center; margin:6px 0 14px; }
-    button {
-      width:100%;
-      padding:16px;
-      font-size:18px;
-      border-radius:14px;
-      border:none;
-      background:#ffcb05;
-      cursor:pointer;
+import 'dart:async';
+import 'dart:math';
+
+import 'package:flutter/material.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+
+/// ランク
+enum OripaRank { lose, a, s, ss }
+
+OripaRank rankFromString(String s) {
+  switch (s.toUpperCase()) {
+    case 'A':
+      return OripaRank.a;
+    case 'S':
+      return OripaRank.s;
+    case 'SS':
+      return OripaRank.ss;
+    default:
+      return OripaRank.lose;
+  }
+}
+
+class OpenAnimationPage extends StatefulWidget {
+  final String oripaId;
+  const OpenAnimationPage({super.key, required this.oripaId});
+
+  @override
+  State<OpenAnimationPage> createState() => _OpenAnimationPageState();
+}
+
+class _OpenAnimationPageState extends State<OpenAnimationPage>
+    with TickerProviderStateMixin {
+  // UI state
+  int openStep = 0; // 0=待機,1=ドンドン,2=開く,3=結果
+  bool isOpening = true;
+
+  OripaRank? rank;
+  String cardName = '';
+  String cardImageUrl = '';
+
+  // Animations
+  late final AnimationController _shakeCtrl;
+  late final AnimationController _pulseCtrl;
+  late final AnimationController _revealCtrl;
+
+  late final Animation<double> _shakeX;
+  late final Animation<double> _pulse;
+  late final Animation<double> _reveal;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _shakeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 120),
+    );
+
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+
+    _revealCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+
+    _shakeX = Tween<double>(begin: -6, end: 6).animate(
+      CurvedAnimation(parent: _shakeCtrl, curve: Curves.easeInOut),
+    );
+
+    _pulse = Tween<double>(begin: 1.0, end: 1.12).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+
+    _reveal = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _revealCtrl, curve: Curves.easeOutBack),
+    );
+
+    // 開始
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startSequence();
+    });
+  }
+
+  @override
+  void dispose() {
+    _shakeCtrl.dispose();
+    _pulseCtrl.dispose();
+    _revealCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startSequence() async {
+    setState(() {
+      rank = null;
+      cardName = '';
+      cardImageUrl = '';
+      openStep = 0;
+      isOpening = true;
+    });
+
+    // ドンドン開始
+    setState(() => openStep = 1);
+    _shakeCtrl.repeat(reverse: true);
+    _pulseCtrl.repeat(reverse: true);
+
+    // ドンドン間（好みで調整）
+    await Future.delayed(const Duration(milliseconds: 1200));
+
+    // ここで「ドン音」を鳴らしたいなら、audioplayers などを追加してここで再生
+
+    // 抽選（サーバー）
+    final result = await _callOpenOripa(widget.oripaId);
+
+    // 結果を反映
+    setState(() {
+      rank = rankFromString(result['rank']?.toString() ?? 'LOSE');
+      cardName = (result['cardName'] ?? '').toString();
+      cardImageUrl = (result['imageUrl'] ?? '').toString();
+    });
+
+    // ドンドン停止
+    _shakeCtrl.stop();
+    _pulseCtrl.stop();
+
+    // 開く
+    setState(() => openStep = 2);
+    await _revealCtrl.forward(from: 0);
+
+    // 結果表示
+    setState(() {
+      openStep = 3;
+      isOpening = false;
+    });
+  }
+
+  Future<Map<String, dynamic>> _callOpenOripa(String oripaId) async {
+    // Firebase Functions: openOripa を呼ぶ
+    final callable = FirebaseFunctions.instance.httpsCallable('openOripa');
+    final resp = await callable.call(<String, dynamic>{
+      'oripaId': oripaId,
+    });
+
+    final data = Map<String, dynamic>.from(resp.data as Map);
+    return data;
+  }
+
+  Color _glowColor(OripaRank? r) {
+    if (r == null) return Colors.transparent;
+    switch (r) {
+      case OripaRank.lose:
+        return const Color(0xFFFF3B30); // 赤
+      case OripaRank.a:
+        return const Color(0xFF34C759); // 緑
+      case OripaRank.s:
+        return const Color(0xFFFFD700); // 金
+      case OripaRank.ss:
+        return Colors.transparent; // SSはレインボーで別描画
     }
-    button:disabled { opacity:.7; cursor:not-allowed; }
+  }
 
-    .result {
-      margin-top:16px;
-      padding:18px 16px;
-      background:#eee;
-      border-radius:14px;
-      text-align:center;
-      font-size:18px;
-      min-height:56px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap:10px;
+  @override
+  Widget build(BuildContext context) {
+    final r = rank;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        alignment: Alignment.center,
+        children: [
+          // 黒背景（すでに Scaffold で黒）
+          // 発光（結果が出たら表示）
+          if (r != null)
+            AnimatedBuilder(
+              animation: _revealCtrl,
+              builder: (_, __) {
+                final t = _reveal.value;
+                final size = 320.0 * (0.7 + 0.3 * t);
+                return Opacity(
+                  opacity: 0.6 * t,
+                  child: Container(
+                    width: size,
+                    height: size,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _glowColor(r),
+                    ),
+                  ),
+                );
+              },
+            ),
+
+          // SS レインボー発光（簡単：グラデ円）
+          if (r == OripaRank.ss)
+            AnimatedBuilder(
+              animation: _revealCtrl,
+              builder: (_, __) {
+                final t = _reveal.value;
+                final size = 340.0 * (0.7 + 0.3 * t);
+                return Opacity(
+                  opacity: 0.75 * t,
+                  child: Container(
+                    width: size,
+                    height: size,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: SweepGradient(
+                        colors: [
+                          Colors.red,
+                          Colors.orange,
+                          Colors.yellow,
+                          Colors.green,
+                          Colors.cyan,
+                          Colors.blue,
+                          Colors.purple,
+                          Colors.red,
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+
+          // 宝箱（閉じ）＋ドンドン
+          if (openStep < 2)
+            AnimatedBuilder(
+              animation: Listenable.merge([_shakeCtrl, _pulseCtrl]),
+              builder: (_, __) {
+                return Transform.translate(
+                  offset: Offset(_shakeX.value, 0),
+                  child: Transform.scale(
+                    scale: _pulse.value,
+                    child: Image.asset(
+                      'assets/treasure_closed.png',
+                      width: 240,
+                      height: 240,
+                    ),
+                  ),
+                );
+              },
+            ),
+
+          // 宝箱（開き）
+          if (openStep >= 2)
+            AnimatedBuilder(
+              animation: _revealCtrl,
+              builder: (_, __) {
+                final t = _reveal.value;
+                return Transform.scale(
+                  scale: 0.9 + 0.1 * t,
+                  child: Image.asset(
+                    'assets/treasure_open.png',
+                    width: 260,
+                    height: 260,
+                  ),
+                );
+              },
+            ),
+
+          // カード表示（結果）
+          if (openStep >= 3)
+            Positioned(
+              top: MediaQuery.of(context).size.height * 0.18,
+              child: Column(
+                children: [
+                  // カード画像
+                  if (cardImageUrl.isNotEmpty)
+                    AnimatedBuilder(
+                      animation: _revealCtrl,
+                      builder: (_, __) {
+                        return Transform.scale(
+                          scale: 0.85 + 0.15 * _reveal.value,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.network(
+                              cardImageUrl,
+                              width: 220,
+                              height: 300,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                width: 220,
+                                height: 300,
+                                color: Colors.white10,
+                                alignment: Alignment.center,
+                                child: const Text(
+                                  '画像エラー',
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                  const SizedBox(height: 14),
+
+                  // テキスト
+                  Text(
+                    _rankText(r),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (cardName.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      cardName,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+          // 下ボタン
+          Positioned(
+            bottom: 28,
+            left: 18,
+            right: 18,
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: isOpening ? null : () => _startSequence(),
+                    child: const Text('もう1回'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      '戻る',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _rankText(OripaRank? r) {
+    if (r == null) return '';
+    switch (r) {
+      case OripaRank.lose:
+        return 'ハズレ';
+      case OripaRank.a:
+        return 'A賞 獲得！';
+      case OripaRank.s:
+        return 'S賞 獲得！';
+      case OripaRank.ss:
+        return 'SS賞 獲得！';
     }
+  }
+}
+flutter:
+  assets:
+    - assets/treasure_closed.png
+    - assets/treasure_open.png
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+admin.initializeApp();
 
-    /* ドキドキ演出：点滅＋ブルブル */
-    .rolling {
-      background: #111 !important;
-      color:#fff;
-      animation: pulse 0.35s infinite alternate, shake 0.12s infinite;
-    }
-    @keyframes pulse {
-      from { filter: brightness(1); transform: scale(1); }
-      to   { filter: brightness(1.2); transform: scale(1.02); }
-    }
-    @keyframes shake {
-      0% { transform: translateX(0); }
-      25% { transform: translateX(-2px); }
-      50% { transform: translateX(2px); }
-      75% { transform: translateX(-2px); }
-      100% { transform: translateX(0); }
-    }
+// 確率：ハズレ多め
+// LOSE 80% / A 15% / S 4% / SS 1% 例
+function drawRank() {
+  const r = Math.random(); // 0.0-1.0
+  if (r < 0.01) return "SS";
+  if (r < 0.05) return "S";
+  if (r < 0.20) return "A";
+  return "LOSE";
+}
 
-    /* 当選演出 */
-    .ss { background: #fff3c4 !important; border: 2px solid #e6b800; }
-    .s  { background: #e8f4ff !important; border: 2px solid #4aa3ff; }
-    .a  { background: #eaffea !important; border: 2px solid #3bd13b; }
-    .lose { background:#eee !important; border: 2px solid transparent; }
+// 仮のカード（rankごとに返す）
+// 本番は Firestore から cards を引いて返すのが普通
+function pickCard(rank) {
+  if (rank === "SS") return { cardName: "SSのカード", imageUrl: "https://picsum.photos/400/600?random=1" };
+  if (rank === "S")  return { cardName: "Sのカード",  imageUrl: "https://picsum.photos/400/600?random=2" };
+  if (rank === "A")  return { cardName: "Aのカード",  imageUrl: "https://picsum.photos/400/600?random=3" };
+  return { cardName: "ハズレ", imageUrl: "https://picsum.photos/400/600?random=4" };
+}
 
-    .note { margin-top:10px; font-size:12px; color:#666; text-align:center; }
-    .small { font-size:14px; opacity:.9; }
-  </style>
-</head>
-<body>
-  <div class="box">
-    <h2>ポケモン オリパ</h2>
+exports.openOripa = functions.https.onCall(async (data, context) => {
+  // 認証必須にしたいならここでチェック（匿名ログインでもOK）
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Login required");
+  }
 
-    <button id="draw">オリパを引く！</button>
+  const oripaId = data.oripaId;
+  if (!oripaId) {
+    throw new functions.https.HttpsError("invalid-argument", "oripaId is required");
+  }
 
-    <div id="result" class="result lose">結果がここに表示されます</div>
+  const uid = context.auth.uid;
 
-    <div class="note">※ デモ用（結果表示のみ）</div>
-  </div>
+  // ここでポイント減算・履歴保存・在庫処理などを入れる
+  // MVP: ランク抽選して返すだけ
+  const rank = drawRank();
+  const card = pickCard(rank);
 
-  <script>
-    // ===== 確率設定（％管理・合計100）=====
-    const prizes = [
-      { key: "ss", name: "SS賞：激レア", w: 1 },   // 1%
-      { key: "s",  name: "S賞：レア",   w: 4 },   // 4%
-      { key: "a",  name: "A賞：当たり", w: 15 },  // 15%
-      { key: "lose", name: "ハズレ",    w: 80 }   // 80%
-    ];
+  // 履歴保存（任意：最初から入れるのおすすめ）
+  await admin.firestore().collection("openHistory").add({
+    uid,
+    oripaId,
+    rank,
+    cardName: card.cardName,
+    imageUrl: card.imageUrl,
+    openedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
 
-    function drawPrize() {
-      const total = prizes.reduce((sum, p) => sum + p.w, 0);
-      let r = Math.random() * total;
-      for (const p of prizes) {
-        r -= p.w;
-        if (r < 0) return p;
-      }
-      return prizes[prizes.length - 1];
-    }
+  return {
+    rank,
+    cardName: card.cardName,
+    imageUrl: card.imageUrl,
+  };
+});
+npm i -g firebase-tools
+firebase login
+firebase init functions
+# 言語は JavaScript を選べばOK
+cd functions
+npm install
+cd ..
+firebase deploy --only functions
 
-    // ===== 効果音（WebAudio / 外部ファイルなし）=====
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AudioCtx();
-
-    function beep(freq, durMs, type="sine", gain=0.08) {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = type;
-      o.frequency.value = freq;
-      g.gain.value = gain;
-      o.connect(g); g.connect(ctx.destination);
-      o.start();
-      o.stop(ctx.currentTime + durMs / 1000);
-    }
-
-    // ドキドキ中の「ピッ」(短い)
-    function tickSound() {
-      beep(880, 70, "square", 0.05);
-    }
-
-    // 結果音（賞で変える）
-    function resultSound(key) {
-      if (key === "ss") { // キラキラ
-        beep(880, 120, "sine", 0.08);
-        setTimeout(()=>beep(1320, 140, "sine", 0.08), 120);
-        setTimeout(()=>beep(1760, 180, "sine", 0.08), 260);
-      } else if (key === "s") {
-        beep(660, 140, "triangle", 0.07);
-        setTimeout(()=>beep(990, 170, "triangle", 0.07), 140);
-      } else if (key === "a") {
-        beep(523, 140, "sine", 0.06);
-        setTimeout(()=>beep(784, 160, "sine", 0.06), 140);
-      } else { // ハズレ
-        beep(220, 220, "sawtooth", 0.04);
-      }
-    }
-
-    function setResultClass(key) {
-      result.classList.remove("ss","s","a","lose","rolling");
-      result.classList.add(key);
-    }
-
-    const btn = document.getElementById("draw");
-    const result = document.getElementById("result");
-
-    btn.onclick = async () => {
-      // ユーザー操作でAudioContextを有効化（これがないと鳴らないことがある）
-      if (ctx.state !== "running") await ctx.resume();
-
-      btn.disabled = true;
-
-      // ドキドキ演出：数回ランダム表示
-      result.classList.remove("ss","s","a","lose");
-      result.classList.add("rolling");
-      result.textContent = "抽選中…";
-
-      const rollTexts = ["ドキドキ…", "まだ…", "いくよ…", "おーぷん！", "……！"];
-      let i = 0;
-      const interval = setInterval(() => {
-        // テキストを切り替える
-        result.innerHTML = `<span class="small">${rollTexts[i % rollTexts.length]}</span>`;
-        tickSound();
-        i++;
-      }, 220);
-
-      // 抽選時間（ここで演出の長さ調整）
-      const DURATION_MS = 1800;
-      setTimeout(() => {
-        clearInterval(interval);
-
-        const p = drawPrize();
-        result.classList.remove("rolling");
-        setResultClass(p.key);
-        result.textContent = p.name;
-
-        resultSound(p.key);
-        btn.disabled = false;
-      }, DURATION_MS);
-    };
-  </script>
-</body>
-</html>
 
 
