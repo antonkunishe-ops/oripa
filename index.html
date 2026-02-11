@@ -2,146 +2,369 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>オリパ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>オリパ抽選</title>
   <style>
-    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:#111; color:#fff; }
-    .wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; }
-    button { padding:14px 18px; font-size:18px; border-radius:12px; border:none; cursor:pointer; font-weight:800; }
-    .btn { background:#00b894; color:#000; }
-    .modal {
-      position:fixed; inset:0; display:none;
-      background:rgba(0,0,0,.92);
-      align-items:center; justify-content:center; flex-direction:column; gap:14px;
+    body { font-family: system-ui, sans-serif; background:#f7f7f7; margin:0; }
+    .box { max-width:420px; margin:40px auto; background:#fff; padding:20px; border-radius:16px; }
+    h2 { text-align:center; margin:6px 0 14px; }
+    button{
+      width:100%; padding:16px; font-size:18px; border-radius:14px; border:none;
+      background:#ffcb05; cursor:pointer;
     }
-    .modal.show { display:flex; }
-    .chest {
-      width:220px; height:220px; background:#333; border-radius:18px;
+    button:disabled{ opacity:.7; cursor:not-allowed; }
+
+    .result{
+      margin-top:16px; padding:18px 16px; background:#eee; border-radius:14px;
+      text-align:center; font-size:18px; min-height:56px;
       display:flex; align-items:center; justify-content:center;
-      transform-origin:center;
+      border:2px solid transparent;
     }
-    .shake { animation: shake .12s infinite alternate, pulse .25s infinite alternate; }
-    @keyframes shake { from { transform: translateX(-6px) scale(1); } to { transform: translateX(6px) scale(1); } }
-    @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.12); } }
+    .ss{ background:#fff3c4 !important; border-color:#e6b800; }
+    .s { background:#e8f4ff !important; border-color:#4aa3ff; }
+    .a { background:#eaffea !important; border-color:#3bd13b; }
+    .lose{ background:#eee !important; }
 
-    .glow {
-      position:absolute; width:340px; height:340px; border-radius:50%;
-      opacity:.7; filter: blur(0px);
+    .note{ margin-top:10px; font-size:12px; color:#666; text-align:center; }
+
+    /* ===== 演出用オーバーレイ ===== */
+    .overlay{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.72);
       display:none;
+      align-items:center; justify-content:center;
+      z-index:9999;
+      padding:20px;
     }
-    .glow.show { display:block; }
+    .overlay.show{ display:flex; }
+    .stage{
+      width:min(520px, 96vw);
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.15);
+      border-radius:18px;
+      padding:22px 18px 18px;
+      text-align:center;
+      color:#fff;
+      backdrop-filter: blur(6px);
+    }
+    .stage h3{ margin:0 0 10px; font-size:18px; font-weight:600; opacity:.95; }
+    .sub{ font-size:14px; opacity:.85; margin-bottom:14px; }
 
-    .lose { background:#ff3b30; }
-    .a { background:#34c759; }
-    .s { background:#ffd700; }
-    .ss {
-      background: conic-gradient(red, orange, yellow, green, cyan, blue, purple, red);
+    /* 宝箱（CSSで表現） */
+    .chest-wrap{ display:flex; justify-content:center; margin:8px 0 8px; }
+    .chest{
+      position:relative;
+      width:220px; height:150px;
+      transform: translateZ(0);
+    }
+    .lid{
+      position:absolute; left:10px; right:10px; top:16px;
+      height:56px;
+      background:linear-gradient(180deg,#ffcb05,#d89b00);
+      border-radius:14px 14px 10px 10px;
+      box-shadow:0 10px 0 rgba(0,0,0,.18);
+      transform-origin: 50% 100%;
+      transform: rotateX(0deg);
+      transition: transform 700ms cubic-bezier(.2,.8,.2,1);
+      border:2px solid rgba(0,0,0,.25);
+    }
+    .base{
+      position:absolute; left:10px; right:10px; bottom:14px;
+      height:78px;
+      background:linear-gradient(180deg,#8b5a2b,#5a3a1c);
+      border-radius:14px;
+      border:2px solid rgba(0,0,0,.25);
+      box-shadow:0 18px 40px rgba(0,0,0,.35);
+    }
+    .band{
+      position:absolute; left:0; right:0; top:32px;
+      height:14px;
+      background:rgba(0,0,0,.18);
+    }
+    .lock{
+      position:absolute; left:50%; top:54px;
+      width:42px; height:34px;
+      transform:translateX(-50%);
+      background:linear-gradient(180deg,#f7f7f7,#bdbdbd);
+      border-radius:10px;
+      border:2px solid rgba(0,0,0,.25);
+    }
+    .lock:after{
+      content:"";
+      position:absolute; left:50%; top:-18px;
+      width:24px; height:22px;
+      transform:translateX(-50%);
+      border:5px solid rgba(255,255,255,.85);
+      border-bottom:none;
+      border-radius:14px 14px 0 0;
+      opacity:.7;
     }
 
-    .result { text-align:center; display:none; }
-    .result.show { display:block; }
-    .rank { font-size:28px; font-weight:900; }
-    .name { color:#ddd; margin-top:6px; }
+    /* ドンドン中の揺れ */
+    .shake{
+      animation: chestShake 120ms infinite;
+    }
+    @keyframes chestShake{
+      0%{ transform:translateX(0) rotate(0deg); }
+      25%{ transform:translateX(-2px) rotate(-0.4deg); }
+      50%{ transform:translateX(2px) rotate(0.4deg); }
+      75%{ transform:translateX(-1px) rotate(-0.2deg); }
+      100%{ transform:translateX(0) rotate(0deg); }
+    }
+
+    /* フラッシュ（開く瞬間） */
+    .flash{
+      position:fixed; inset:0;
+      background:rgba(255,255,255,.0);
+      pointer-events:none;
+      opacity:0;
+      z-index:10000;
+    }
+    .flash.on{
+      animation: flash 380ms ease-out;
+    }
+    @keyframes flash{
+      0%{ opacity:0; }
+      20%{ opacity:.95; }
+      100%{ opacity:0; }
+    }
+
+    /* ふたが開く */
+    .open .lid{
+      transform: rotateX(70deg) translateY(-6px);
+    }
+
+    /* 結果カード */
+    .reveal{
+      margin-top:14px;
+      display:none;
+      background:rgba(255,255,255,.92);
+      color:#111;
+      border-radius:14px;
+      padding:14px 12px;
+      font-size:18px;
+      border:2px solid rgba(255,255,255,.55);
+    }
+    .reveal.show{ display:block; }
+    .badge{
+      display:inline-block;
+      font-size:12px;
+      padding:4px 10px;
+      border-radius:999px;
+      margin-bottom:8px;
+      background:#111;
+      color:#fff;
+    }
+    .reveal.ss{ border-color:#e6b800; }
+    .reveal.s{ border-color:#4aa3ff; }
+    .reveal.a{ border-color:#3bd13b; }
+    .reveal.lose{ border-color:#bbb; }
+
+    .closebtn{
+      margin-top:12px;
+      width:100%;
+      padding:12px;
+      border-radius:12px;
+      border:none;
+      cursor:pointer;
+      background:rgba(255,255,255,.18);
+      color:#fff;
+      font-size:14px;
+    }
   </style>
-
-  <!-- Firebase (CDN) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
 </head>
 <body>
-  <div class="wrap">
-    <h2>オリパ</h2>
-    <button class="btn" id="drawBtn">オリパを引く！</button>
-    <div style="color:#aaa;font-size:13px;">※開発用デモ</div>
+  <div class="box">
+    <h2>ポケモン オリパ</h2>
+    <button id="draw">オリパを引く！</button>
+    <div id="result" class="result lose">結果がここに表示されます</div>
+    <div class="note">※ デモ用（結果表示のみ）</div>
   </div>
 
-  <div class="modal" id="modal">
-    <div class="glow" id="glow"></div>
-    <div class="chest" id="chest">宝箱</div>
-    <div class="result" id="result">
-      <div class="rank" id="rankText"></div>
-      <div class="name" id="cardName"></div>
+  <!-- 演出オーバーレイ -->
+  <div id="overlay" class="overlay" aria-hidden="true">
+    <div class="stage">
+      <h3>宝箱を開けます…</h3>
+      <div id="sub" class="sub">ドキドキ…</div>
+
+      <div class="chest-wrap">
+        <div id="chest" class="chest">
+          <div class="lid"></div>
+          <div class="base">
+            <div class="band"></div>
+          </div>
+          <div class="lock"></div>
+        </div>
+      </div>
+
+      <div id="reveal" class="reveal">
+        <div id="badge" class="badge">結果</div>
+        <div id="revealText" style="font-weight:700;"></div>
+      </div>
+
+      <button id="close" class="closebtn" style="display:none;">閉じる</button>
     </div>
-    <button id="againBtn" style="display:none;">もう1回</button>
   </div>
+  <div id="flash" class="flash"></div>
 
-<script>
-  // TODO: ここをあなたのFirebase設定に差し替える
-  const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-  };
+  <script>
+    // ===== 確率（％管理・合計100）=====
+    const prizes = [
+      { key: "ss",  name: "SS賞：激レア", w: 1 },   // 1%
+      { key: "s",   name: "S賞：レア",   w: 4 },   // 4%
+      { key: "a",   name: "A賞：当たり", w: 15 },  // 15%
+      { key: "lose",name: "ハズレ",      w: 80 }   // 80%
+    ];
 
-  firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const functions = firebase.functions(); // 同一リージョンならOK（必要なら functions.useEmulator / region対応）
+    function drawPrize(){
+      const total = prizes.reduce((sum,p)=>sum+p.w,0);
+      let r = Math.random()*total;
+      for(const p of prizes){
+        r -= p.w;
+        if(r < 0) return p;
+      }
+      return prizes[prizes.length-1];
+    }
 
-  const drawBtn = document.getElementById('drawBtn');
-  const modal = document.getElementById('modal');
-  const chest = document.getElementById('chest');
-  const glow = document.getElementById('glow');
-  const result = document.getElementById('result');
-  const rankText = document.getElementById('rankText');
-  const cardName = document.getElementById('cardName');
-  const againBtn = document.getElementById('againBtn');
+    // ===== 音（WebAudio / 外部ファイルなし）=====
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
 
-  function setGlow(rank){
-    glow.className = 'glow show';
-    glow.classList.remove('lose','a','s','ss');
-    if(rank === 'SS') glow.classList.add('ss');
-    else if(rank === 'S') glow.classList.add('s');
-    else if(rank === 'A') glow.classList.add('a');
-    else glow.classList.add('lose');
-  }
+    function tone(freq, ms, type="sine", gain=0.07){
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.value = gain;
+      o.connect(g); g.connect(ctx.destination);
+      o.start();
+      o.stop(ctx.currentTime + ms/1000);
+    }
 
-  async function ensureAnonLogin(){
-    if(auth.currentUser) return auth.currentUser;
-    const cred = await auth.signInAnonymously();
-    return cred.user;
-  }
+    // ドンドン（低めの打撃音っぽく）
+    function don(){
+      tone(120, 70, "square", 0.06);
+      setTimeout(()=>tone(90, 90, "sine", 0.05), 10);
+    }
 
-  async function openSequence(){
-    drawBtn.disabled = true;
-    result.classList.remove('show');
-    againBtn.style.display = 'none';
-    glow.classList.remove('show');
+    // 開く瞬間
+    function openSound(){
+      tone(440, 90, "triangle", 0.05);
+      setTimeout(()=>tone(880, 120, "triangle", 0.06), 90);
+    }
 
-    modal.classList.add('show');
-    chest.classList.add('shake');
-    chest.textContent = '宝箱';
+    // 当選音
+    function resultSound(key){
+      if(key === "ss"){
+        tone(880, 120, "sine", 0.08);
+        setTimeout(()=>tone(1320, 140, "sine", 0.08), 120);
+        setTimeout(()=>tone(1760, 180, "sine", 0.08), 260);
+      }else if(key === "s"){
+        tone(660, 140, "triangle", 0.07);
+        setTimeout(()=>tone(990, 170, "triangle", 0.07), 140);
+      }else if(key === "a"){
+        tone(523, 140, "sine", 0.06);
+        setTimeout(()=>tone(784, 160, "sine", 0.06), 140);
+      }else{
+        tone(220, 220, "sawtooth", 0.04);
+      }
+    }
 
-    await new Promise(r => setTimeout(r, 1200));
+    // ===== UI参照 =====
+    const btn = document.getElementById("draw");
+    const result = document.getElementById("result");
 
-    await ensureAnonLogin();
+    const overlay = document.getElementById("overlay");
+    const chest = document.getElementById("chest");
+    const sub = document.getElementById("sub");
+    const reveal = document.getElementById("reveal");
+    const revealText = document.getElementById("revealText");
+    const badge = document.getElementById("badge");
+    const closeBtn = document.getElementById("close");
+    const flash = document.getElementById("flash");
 
-    // openOripa (callable) を呼ぶ
-    const openOripa = functions.httpsCallable('openOripa');
-    const res = await openOripa({ oripaId: "oripa_001" });
-    const data = res.data || {};
-    const rank = (data.rank || "LOSE").toUpperCase();
+    function setMainResultClass(key){
+      result.classList.remove("ss","s","a","lose");
+      result.classList.add(key);
+    }
+    function setRevealClass(key){
+      reveal.classList.remove("ss","s","a","lose");
+      reveal.classList.add(key);
+    }
 
-    chest.classList.remove('shake');
-    chest.textContent = 'OPEN!';
+    function showOverlay(){
+      overlay.classList.add("show");
+      overlay.setAttribute("aria-hidden","false");
+    }
+    function hideOverlay(){
+      overlay.classList.remove("show");
+      overlay.setAttribute("aria-hidden","true");
+    }
 
-    setGlow(rank);
+    function resetOverlay(){
+      chest.classList.remove("shake","open");
+      reveal.classList.remove("show");
+      closeBtn.style.display = "none";
+      sub.textContent = "ドキドキ…";
+      badge.textContent = "結果";
+      revealText.textContent = "";
+    }
 
-    rankText.textContent =
-      rank === 'SS' ? 'SS賞 獲得！' :
-      rank === 'S'  ? 'S賞 獲得！' :
-      rank === 'A'  ? 'A賞 獲得！' : 'ハズレ';
+    btn.onclick = async () => {
+      if (ctx.state !== "running") await ctx.resume();
 
-    cardName.textContent = data.cardName || '';
+      btn.disabled = true;
+      resetOverlay();
+      showOverlay();
 
-    result.classList.add('show');
-    againBtn.style.display = 'inline-block';
-    drawBtn.disabled = false;
-  }
+      // 1) 暗転＆宝箱登場 → ドンドン（3回）
+      chest.classList.add("shake");
+      sub.textContent = "どん…どん…どん…";
+      let count = 0;
+      const interval = setInterval(()=>{
+        don();
+        count++;
+        if(count >= 3){
+          clearInterval(interval);
 
-  drawBtn.addEventListener('click', openSequence);
-  againBtn.addEventListener('click', openSequence);
-</script>
+          // 2) 開く
+          chest.classList.remove("shake");
+          sub.textContent = "いくよ…オープン！";
+          openSound();
+          flash.classList.add("on");
+          setTimeout(()=>flash.classList.remove("on"), 450);
+
+          chest.classList.add("open");
+
+          // 3) 結果を表示
+          setTimeout(()=>{
+            const p = drawPrize();
+
+            // オーバーレイ内
+            setRevealClass(p.key);
+            revealText.textContent = p.name;
+            badge.textContent = "結果";
+            reveal.classList.add("show");
+            resultSound(p.key);
+
+            // メイン画面にも反映
+            setMainResultClass(p.key);
+            result.textContent = p.name;
+
+            sub.textContent = "結果はこちら！";
+            closeBtn.style.display = "block";
+            btn.disabled = false;
+          }, 900);
+        }
+      }, 420);
+    };
+
+    closeBtn.onclick = () => {
+      hideOverlay();
+    };
+
+    // オーバーレイ外クリックで閉じない（誤タップ防止）
+  </script>
 </body>
 </html>
 
