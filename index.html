@@ -1,372 +1,563 @@
 <!doctype html>
 <html lang="ja">
-</html>
-<!doctype html>
-<html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>オリパ抽選</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ORIPA</title>
   <style>
-    body { font-family: system-ui, sans-serif; background:#f7f7f7; margin:0; }
-    .box { max-width:420px; margin:40px auto; background:#fff; padding:20px; border-radius:16px; }
-    h2 { text-align:center; margin:6px 0 14px; }
-    button{
-      width:100%; padding:16px; font-size:18px; border-radius:14px; border:none;
-      background:#ffcb05; cursor:pointer;
+    :root{
+      --bg:#05060a;
+      --white: #fff;
+      --muted:#b6b9c6;
+      --glass: rgba(255,255,255,.08);
+      --glass2: rgba(255,255,255,.14);
     }
-    button:disabled{ opacity:.7; cursor:not-allowed; }
-
-    .result{
-      margin-top:16px; padding:18px 16px; background:#eee; border-radius:14px;
-      text-align:center; font-size:18px; min-height:56px;
-      display:flex; align-items:center; justify-content:center;
-      border:2px solid transparent;
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: radial-gradient(1200px 700px at 50% 30%, #0c1030 0%, var(--bg) 45%, #000 100%);
+      color: var(--white);
+      overflow-x:hidden;
     }
-    .ss{ background:#fff3c4 !important; border-color:#e6b800; }
-    .s { background:#e8f4ff !important; border-color:#4aa3ff; }
-    .a { background:#eaffea !important; border-color:#3bd13b; }
-    .lose{ background:#eee !important; }
-
-    .note{ margin-top:10px; font-size:12px; color:#666; text-align:center; }
-
-    /* ===== 演出用オーバーレイ ===== */
-    .overlay{
-      position:fixed; inset:0;
-      background:rgba(0,0,0,.72);
-      display:none;
-      align-items:center; justify-content:center;
-      z-index:9999;
-      padding:20px;
-    }
-    .overlay.show{ display:flex; }
-    .stage{
-      width:min(520px, 96vw);
-      background:rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.15);
-      border-radius:18px;
-      padding:22px 18px 18px;
+    .wrap{
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      gap:18px;
+      padding:32px 16px;
       text-align:center;
-      color:#fff;
-      backdrop-filter: blur(6px);
     }
-    .stage h3{ margin:0 0 10px; font-size:18px; font-weight:600; opacity:.95; }
-    .sub{ font-size:14px; opacity:.85; margin-bottom:14px; }
-
-    /* 宝箱（CSSで表現） */
-    .chest-wrap{ display:flex; justify-content:center; margin:8px 0 8px; }
-    .chest{
+    h1{
+      margin:0;
+      font-size:28px;
+      letter-spacing:.08em;
+      font-weight:900;
+    }
+    .sub{color:var(--muted); font-size:13px}
+    .card{
+      width:min(540px, 96vw);
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 22px;
+      padding: 18px;
+      box-shadow: 0 30px 80px rgba(0,0,0,.55);
       position:relative;
-      width:220px; height:150px;
-      transform: translateZ(0);
+      overflow:hidden;
     }
-    .lid{
-      position:absolute; left:10px; right:10px; top:16px;
-      height:56px;
-      background:linear-gradient(180deg,#ffcb05,#d89b00);
-      border-radius:14px 14px 10px 10px;
-      box-shadow:0 10px 0 rgba(0,0,0,.18);
-      transform-origin: 50% 100%;
-      transform: rotateX(0deg);
-      transition: transform 700ms cubic-bezier(.2,.8,.2,1);
-      border:2px solid rgba(0,0,0,.25);
-    }
-    .base{
-      position:absolute; left:10px; right:10px; bottom:14px;
-      height:78px;
-      background:linear-gradient(180deg,#8b5a2b,#5a3a1c);
-      border-radius:14px;
-      border:2px solid rgba(0,0,0,.25);
-      box-shadow:0 18px 40px rgba(0,0,0,.35);
-    }
-    .band{
-      position:absolute; left:0; right:0; top:32px;
-      height:14px;
-      background:rgba(0,0,0,.18);
-    }
-    .lock{
-      position:absolute; left:50%; top:54px;
-      width:42px; height:34px;
-      transform:translateX(-50%);
-      background:linear-gradient(180deg,#f7f7f7,#bdbdbd);
-      border-radius:10px;
-      border:2px solid rgba(0,0,0,.25);
-    }
-    .lock:after{
+    .card:before{
       content:"";
-      position:absolute; left:50%; top:-18px;
-      width:24px; height:22px;
-      transform:translateX(-50%);
-      border:5px solid rgba(255,255,255,.85);
-      border-bottom:none;
-      border-radius:14px 14px 0 0;
-      opacity:.7;
-    }
-
-    /* ドンドン中の揺れ */
-    .shake{
-      animation: chestShake 120ms infinite;
-    }
-    @keyframes chestShake{
-      0%{ transform:translateX(0) rotate(0deg); }
-      25%{ transform:translateX(-2px) rotate(-0.4deg); }
-      50%{ transform:translateX(2px) rotate(0.4deg); }
-      75%{ transform:translateX(-1px) rotate(-0.2deg); }
-      100%{ transform:translateX(0) rotate(0deg); }
-    }
-
-    /* フラッシュ（開く瞬間） */
-    .flash{
-      position:fixed; inset:0;
-      background:rgba(255,255,255,.0);
+      position:absolute; inset:-2px;
+      background: radial-gradient(900px 250px at 20% 0%, rgba(0,255,255,.12), transparent 60%),
+                  radial-gradient(900px 250px at 80% 0%, rgba(255,0,255,.12), transparent 60%);
       pointer-events:none;
-      opacity:0;
-      z-index:10000;
+      filter: blur(0px);
+      opacity:.9;
     }
-    .flash.on{
-      animation: flash 380ms ease-out;
+    .row{
+      position:relative;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:center;
+      flex-wrap:wrap;
+      z-index:1;
     }
-    @keyframes flash{
-      0%{ opacity:0; }
-      20%{ opacity:.95; }
-      100%{ opacity:0; }
-    }
-
-    /* ふたが開く */
-    .open .lid{
-      transform: rotateX(70deg) translateY(-6px);
-    }
-
-    /* 結果カード */
-    .reveal{
-      margin-top:14px;
-      display:none;
-      background:rgba(255,255,255,.92);
-      color:#111;
-      border-radius:14px;
-      padding:14px 12px;
-      font-size:18px;
-      border:2px solid rgba(255,255,255,.55);
-    }
-    .reveal.show{ display:block; }
-    .badge{
-      display:inline-block;
-      font-size:12px;
-      padding:4px 10px;
-      border-radius:999px;
-      margin-bottom:8px;
-      background:#111;
-      color:#fff;
-    }
-    .reveal.ss{ border-color:#e6b800; }
-    .reveal.s{ border-color:#4aa3ff; }
-    .reveal.a{ border-color:#3bd13b; }
-    .reveal.lose{ border-color:#bbb; }
-
-    .closebtn{
-      margin-top:12px;
-      width:100%;
-      padding:12px;
-      border-radius:12px;
+    button{
       border:none;
+      border-radius: 16px;
+      padding: 14px 18px;
+      font-size:16px;
+      font-weight:900;
       cursor:pointer;
-      background:rgba(255,255,255,.18);
+      transition: transform .12s ease, filter .12s ease, opacity .12s ease;
+      letter-spacing:.04em;
+    }
+    button:active{transform: scale(.98)}
+    .btn{
+      background: linear-gradient(135deg, #00e5ff, #7c4dff);
+      color:#05060a;
+      box-shadow: 0 14px 35px rgba(124,77,255,.35);
+    }
+    .btn:disabled{opacity:.55; cursor:not-allowed; filter:grayscale(.25)}
+    .btn2{
+      background: transparent;
+      color: var(--white);
+      border: 1px solid rgba(255,255,255,.22);
+    }
+
+    /* ====== MODAL / STAGE ====== */
+    .modal{
+      position:fixed;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      background: rgba(0,0,0,.85);
+      backdrop-filter: blur(6px);
+      z-index: 50;
+    }
+    .modal.show{display:flex}
+    .stage{
+      width:min(720px, 96vw);
+      height:min(780px, 92vh);
+      border-radius: 28px;
+      background: radial-gradient(900px 600px at 50% 35%, rgba(255,255,255,.10), rgba(255,255,255,.02));
+      border:1px solid rgba(255,255,255,.12);
+      position:relative;
+      overflow:hidden;
+      box-shadow: 0 30px 120px rgba(0,0,0,.65);
+    }
+    .vignette{
+      position:absolute; inset:-30%;
+      background: radial-gradient(circle at 50% 35%, rgba(0,0,0,.0) 0%, rgba(0,0,0,.65) 60%, rgba(0,0,0,.92) 100%);
+      pointer-events:none;
+      z-index:2;
+    }
+    .spot{
+      position:absolute;
+      width: 540px; height: 540px;
+      left:50%; top: 26%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(255,255,255,.35) 0%, rgba(255,255,255,.10) 25%, transparent 70%);
+      filter: blur(1px);
+      opacity:.0;
+      z-index:1;
+      transition: opacity .35s ease;
+    }
+    .spot.on{opacity:1}
+
+    /* particles canvas */
+    canvas#fx{
+      position:absolute; inset:0;
+      z-index:3;
+    }
+
+    /* floor */
+    .floor{
+      position:absolute; left:50%; bottom:18%;
+      transform: translateX(-50%);
+      width: 520px; height: 80px;
+      background: radial-gradient(closest-side, rgba(255,255,255,.12), rgba(255,255,255,0));
+      filter: blur(0px);
+      opacity:.9;
+      z-index:1;
+    }
+
+    /* chest */
+    .chestWrap{
+      position:absolute;
+      left:50%; top:44%;
+      transform: translate(-50%, -50%);
+      z-index:4;
+      text-align:center;
+    }
+    .chest{
+      width: 240px; height: 240px;
+      border-radius: 26px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.02)),
+        radial-gradient(120px 120px at 40% 35%, rgba(255,255,255,.10), transparent 65%),
+        radial-gradient(120px 120px at 60% 55%, rgba(255,255,255,.08), transparent 65%);
+      border:1px solid rgba(255,255,255,.14);
+      box-shadow: 0 24px 70px rgba(0,0,0,.65);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      overflow:hidden;
+      transform: translateY(-460px) scale(.92);
+      opacity:0;
+    }
+    .chest:before{
+      content:"";
+      position:absolute; inset:-30%;
+      background: conic-gradient(from 0deg, rgba(0,229,255,.18), rgba(124,77,255,.18), rgba(255,64,129,.14), rgba(0,229,255,.18));
+      filter: blur(12px);
+      opacity:.0;
+      transition: opacity .25s ease;
+    }
+    .chest.ready:before{opacity:1}
+    .chestLabel{
+      font-weight:950;
+      letter-spacing:.08em;
+      font-size:18px;
       color:#fff;
-      font-size:14px;
+      text-shadow: 0 8px 20px rgba(0,0,0,.55);
+      z-index:1;
+    }
+
+    /* entrance drop */
+    .dropIn{
+      animation: dropIn .55s cubic-bezier(.2,1.2,.2,1) forwards;
+    }
+    @keyframes dropIn{
+      0%{ transform: translateY(-460px) scale(.92); opacity:0; }
+      60%{ transform: translateY(10px) scale(1.02); opacity:1; }
+      100%{ transform: translateY(0px) scale(1.0); opacity:1; }
+    }
+
+    /* don-don */
+    .don{
+      animation: donShake .12s infinite alternate, donPulse .26s infinite alternate;
+    }
+    @keyframes donShake{
+      from{ transform: translateY(0) translateX(-6px) rotate(-1deg); }
+      to  { transform: translateY(0) translateX(6px) rotate(1deg); }
+    }
+    @keyframes donPulse{
+      from{ filter: brightness(1.0); }
+      to  { filter: brightness(1.25); }
+    }
+
+    /* open flash */
+    .flash{
+      position:absolute; inset:0;
+      background: radial-gradient(circle at 50% 38%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.20) 25%, transparent 60%);
+      opacity:0;
+      z-index:10;
+      pointer-events:none;
+    }
+    .flash.go{animation: flash .45s ease-out forwards;}
+    @keyframes flash{
+      0%{opacity:0}
+      25%{opacity:1}
+      100%{opacity:0}
+    }
+
+    /* glow ring (rank) */
+    .glow{
+      position:absolute;
+      left:50%; top:44%;
+      transform: translate(-50%, -50%);
+      width: 380px; height: 380px;
+      border-radius:50%;
+      opacity:0;
+      z-index:1;
+      filter: blur(0px);
+    }
+    .glow.show{animation: glowIn .55s ease forwards;}
+    @keyframes glowIn{
+      0%{opacity:0; transform: translate(-50%,-50%) scale(.75)}
+      100%{opacity:.85; transform: translate(-50%,-50%) scale(1)}
+    }
+    .glow.lose{background:#ff3b30}
+    .glow.a{background:#34c759}
+    .glow.s{background:#ffd700}
+    .glow.ss{
+      background: conic-gradient(red, orange, yellow, green, cyan, blue, purple, red);
+      animation: glowIn .55s ease forwards, spin 1.6s linear infinite;
+    }
+    @keyframes spin{to{transform: translate(-50%,-50%) scale(1) rotate(360deg)}}
+
+    /* result box */
+    .result{
+      position:absolute;
+      left:50%; bottom:10%;
+      transform: translateX(-50%);
+      width:min(520px, 92%);
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 18px;
+      padding: 14px 14px 16px;
+      z-index:11;
+      opacity:0;
+    }
+    .result.show{animation: rise .55s cubic-bezier(.2,1.2,.2,1) forwards;}
+    @keyframes rise{
+      0%{opacity:0; transform: translateX(-50%) translateY(20px)}
+      100%{opacity:1; transform: translateX(-50%) translateY(0px)}
+    }
+    .rankText{font-size:28px; font-weight:950; letter-spacing:.06em}
+    .cardName{color:#d9dbe6; margin-top:6px; font-weight:700}
+    .small{color:var(--muted); font-size:12px; margin-top:6px}
+
+    .stageBtns{
+      position:absolute;
+      left:50%; top:6%;
+      transform: translateX(-50%);
+      display:flex; gap:10px;
+      z-index:20;
+    }
+    .pill{
+      padding:10px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.10);
+      border:1px solid rgba(255,255,255,.14);
+      font-weight:900;
+      font-size:13px;
+      color:#fff;
     }
   </style>
+
+  <!-- Firebase CDN -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
 </head>
 <body>
-  <div class="box">
-    <h2>ポケモン オリパ</h2>
-    <button id="draw">オリパを引く！</button>
-    <div id="result" class="result lose">結果がここに表示されます</div>
-    <div class="note">※ デモ用（結果表示のみ）</div>
+  <div class="wrap">
+    <h1>ORIPA</h1>
+    <div class="card">
+      <div class="row">
+        <button class="btn" id="drawBtn">オリパを引く！</button>
+        <button class="btn2" id="openStageBtn">演出だけテスト</button>
+      </div>
+      <div class="sub" style="margin-top:10px;">
+        黒→宝箱→ドンドン→開封→色＆粒子（赤/緑/金/虹）
+      </div>
+    </div>
+    <div class="sub">GitHub Pages + Firebase Functions（開発用デモ）</div>
   </div>
 
-  <!-- 演出オーバーレイ -->
-  <div id="overlay" class="overlay" aria-hidden="true">
-    <div class="stage">
-      <h3>宝箱を開けます…</h3>
-      <div id="sub" class="sub">ドキドキ…</div>
+  <div class="modal" id="modal">
+    <div class="stage" id="stage">
+      <div class="spot" id="spot"></div>
+      <div class="floor"></div>
+      <div class="glow" id="glow"></div>
+      <div class="chestWrap">
+        <div class="chest" id="chest"><div class="chestLabel" id="chestLabel">TREASURE</div></div>
+      </div>
+      <div class="flash" id="flash"></div>
+      <canvas id="fx"></canvas>
+      <div class="vignette"></div>
 
-      <div class="chest-wrap">
-        <div id="chest" class="chest">
-          <div class="lid"></div>
-          <div class="base">
-            <div class="band"></div>
-          </div>
-          <div class="lock"></div>
-        </div>
+      <div class="stageBtns">
+        <span class="pill" id="closeBtn">閉じる</span>
+        <span class="pill" id="againBtn" style="opacity:.6; pointer-events:none;">もう1回</span>
       </div>
 
-      <div id="reveal" class="reveal">
-        <div id="badge" class="badge">結果</div>
-        <div id="revealText" style="font-weight:700;"></div>
+      <div class="result" id="result">
+        <div class="rankText" id="rankText"></div>
+        <div class="cardName" id="cardName"></div>
+        <div class="small" id="debugText"></div>
       </div>
-
-      <button id="close" class="closebtn" style="display:none;">閉じる</button>
     </div>
   </div>
-  <div id="flash" class="flash"></div>
 
-  <script>
-    // ===== 確率（％管理・合計100）=====
-    const prizes = [
-      { key: "ss",  name: "SS賞：激レア", w: 1 },   // 1%
-      { key: "s",   name: "S賞：レア",   w: 4 },   // 4%
-      { key: "a",   name: "A賞：当たり", w: 15 },  // 15%
-      { key: "lose",name: "ハズレ",      w: 80 }   // 80%
-    ];
+<script>
+  // ✅ ここだけ自分のに差し替え
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+  };
 
-    function drawPrize(){
-      const total = prizes.reduce((sum,p)=>sum+p.w,0);
-      let r = Math.random()*total;
-      for(const p of prizes){
-        r -= p.w;
-        if(r < 0) return p;
-      }
-      return prizes[prizes.length-1];
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const functions = firebase.functions();
+
+  const drawBtn = document.getElementById('drawBtn');
+  const openStageBtn = document.getElementById('openStageBtn');
+
+  const modal = document.getElementById('modal');
+  const stage = document.getElementById('stage');
+  const spot = document.getElementById('spot');
+  const chest = document.getElementById('chest');
+  const chestLabel = document.getElementById('chestLabel');
+  const glow = document.getElementById('glow');
+  const flash = document.getElementById('flash');
+  const result = document.getElementById('result');
+  const rankText = document.getElementById('rankText');
+  const cardName = document.getElementById('cardName');
+  const debugText = document.getElementById('debugText');
+  const closeBtn = document.getElementById('closeBtn');
+  const againBtn = document.getElementById('againBtn');
+
+  const canvas = document.getElementById('fx');
+  const ctx = canvas.getContext('2d');
+  let W=0,H=0, particles=[], raf=0;
+  function resize(){
+    const r = stage.getBoundingClientRect();
+    W = canvas.width = Math.floor(r.width * devicePixelRatio);
+    H = canvas.height = Math.floor(r.height * devicePixelRatio);
+  }
+  window.addEventListener('resize', ()=>{ if(modal.classList.contains('show')) resize(); });
+
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+  function makeParticles(rank){
+    particles.length = 0;
+    const base = rank==='SS' ? 260 : rank==='S' ? 170 : rank==='A' ? 130 : 90;
+    const colors =
+      rank==='SS' ? ['#ff3b30','#ffcc00','#34c759','#00e5ff','#7c4dff','#ff40a1'] :
+      rank==='S'  ? ['#ffd700','#fff2a6','#ffcc00','#ffe27a'] :
+      rank==='A'  ? ['#34c759','#b7ffd1','#66ff9e'] :
+                   ['#ff3b30','#ff7a70','#ffb0aa'];
+
+    const r = stage.getBoundingClientRect();
+    const cx = (r.width/2) * devicePixelRatio;
+    const cy = (r.height*0.44) * devicePixelRatio;
+
+    for(let i=0;i<base;i++){
+      const ang = rand(-Math.PI*0.95, -Math.PI*0.05);
+      const sp = rand(6, 18) * devicePixelRatio;
+      particles.push({
+        x: cx + rand(-20,20)*devicePixelRatio,
+        y: cy + rand(-10,10)*devicePixelRatio,
+        vx: Math.cos(ang)*sp,
+        vy: Math.sin(ang)*sp,
+        g: rand(0.35, 0.85) * devicePixelRatio,
+        s: rand(1.2, 3.6) * devicePixelRatio,
+        a: rand(0.6, 1.0),
+        c: pick(colors),
+        life: rand(26, 68)
+      });
     }
+  }
 
-    // ===== 音（WebAudio / 外部ファイルなし）=====
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AudioCtx();
+  function tick(){
+    ctx.clearRect(0,0,W,H);
+    for(const p of particles){
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += p.g;
+      p.vx *= 0.98;
+      p.vy *= 0.985;
+      p.life -= 1;
+      p.a *= 0.985;
 
-    function tone(freq, ms, type="sine", gain=0.07){
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = type;
-      o.frequency.value = freq;
-      g.gain.value = gain;
-      o.connect(g); g.connect(ctx.destination);
-      o.start();
-      o.stop(ctx.currentTime + ms/1000);
+      ctx.globalAlpha = Math.max(0, p.a);
+      ctx.fillStyle = p.c;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.s, 0, Math.PI*2);
+      ctx.fill();
     }
+    ctx.globalAlpha = 1;
+    particles = particles.filter(p => p.life > 0 && p.a > 0.02);
+    raf = requestAnimationFrame(tick);
+  }
 
-    // ドンドン（低めの打撃音っぽく）
-    function don(){
-      tone(120, 70, "square", 0.06);
-      setTimeout(()=>tone(90, 90, "sine", 0.05), 10);
+  async function ensureAnonLogin(){
+    if(auth.currentUser) return auth.currentUser;
+    const cred = await auth.signInAnonymously();
+    return cred.user;
+  }
+
+  function resetStage(){
+    spot.classList.remove('on');
+    chest.className = 'chest';
+    glow.className = 'glow';
+    result.classList.remove('show');
+    flash.classList.remove('go');
+    chestLabel.textContent = 'TREASURE';
+    rankText.textContent = '';
+    cardName.textContent = '';
+    debugText.textContent = '';
+    againBtn.style.opacity = .6;
+    againBtn.style.pointerEvents = 'none';
+    cancelAnimationFrame(raf);
+    particles.length = 0;
+    ctx.clearRect(0,0,W,H);
+  }
+
+  function setGlow(rank){
+    glow.className = 'glow show';
+    glow.classList.remove('lose','a','s','ss');
+    if(rank === 'SS') glow.classList.add('ss');
+    else if(rank === 'S') glow.classList.add('s');
+    else if(rank === 'A') glow.classList.add('a');
+    else glow.classList.add('lose');
+  }
+
+  function rankLabel(rank){
+    if(rank==='SS') return 'SS賞 獲得！';
+    if(rank==='S')  return 'S賞 獲得！';
+    if(rank==='A')  return 'A賞 獲得！';
+    return 'ハズレ';
+  }
+
+  function microShake(ms=260){
+    const t0 = performance.now();
+    const amp = 3;
+    function step(t){
+      const k = Math.min(1, (t - t0)/ms);
+      const x = (Math.random()*2-1) * amp * (1-k);
+      const y = (Math.random()*2-1) * amp * (1-k);
+      stage.style.transform = `translate(${x}px, ${y}px)`;
+      if(k < 1) requestAnimationFrame(step);
+      else stage.style.transform = '';
     }
+    requestAnimationFrame(step);
+  }
 
-    // 開く瞬間
-    function openSound(){
-      tone(440, 90, "triangle", 0.05);
-      setTimeout(()=>tone(880, 120, "triangle", 0.06), 90);
-    }
+  async function playSequence(getRankFn){
+    resetStage();
+    modal.classList.add('show');
+    resize();
 
-    // 当選音
-    function resultSound(key){
-      if(key === "ss"){
-        tone(880, 120, "sine", 0.08);
-        setTimeout(()=>tone(1320, 140, "sine", 0.08), 120);
-        setTimeout(()=>tone(1760, 180, "sine", 0.08), 260);
-      }else if(key === "s"){
-        tone(660, 140, "triangle", 0.07);
-        setTimeout(()=>tone(990, 170, "triangle", 0.07), 140);
-      }else if(key === "a"){
-        tone(523, 140, "sine", 0.06);
-        setTimeout(()=>tone(784, 160, "sine", 0.06), 140);
-      }else{
-        tone(220, 220, "sawtooth", 0.04);
-      }
-    }
+    spot.classList.add('on');
 
-    // ===== UI参照 =====
-    const btn = document.getElementById("draw");
-    const result = document.getElementById("result");
+    // 宝箱着地
+    chest.classList.add('dropIn');
+    await new Promise(r => setTimeout(r, 520));
+    chest.classList.add('ready');
 
-    const overlay = document.getElementById("overlay");
-    const chest = document.getElementById("chest");
-    const sub = document.getElementById("sub");
-    const reveal = document.getElementById("reveal");
-    const revealText = document.getElementById("revealText");
-    const badge = document.getElementById("badge");
-    const closeBtn = document.getElementById("close");
-    const flash = document.getElementById("flash");
+    // ドンドン
+    chest.classList.add('don');
+    microShake(220);
+    await new Promise(r => setTimeout(r, 1100));
 
-    function setMainResultClass(key){
-      result.classList.remove("ss","s","a","lose");
-      result.classList.add(key);
-    }
-    function setRevealClass(key){
-      reveal.classList.remove("ss","s","a","lose");
-      reveal.classList.add(key);
-    }
+    // 取得（Firebase or テスト）
+    const { rank, name, debug } = await getRankFn();
 
-    function showOverlay(){
-      overlay.classList.add("show");
-      overlay.setAttribute("aria-hidden","false");
-    }
-    function hideOverlay(){
-      overlay.classList.remove("show");
-      overlay.setAttribute("aria-hidden","true");
-    }
+    // 開封フラッシュ
+    chest.classList.remove('don');
+    flash.classList.add('go');
+    microShake(320);
 
-    function resetOverlay(){
-      chest.classList.remove("shake","open");
-      reveal.classList.remove("show");
-      closeBtn.style.display = "none";
-      sub.textContent = "ドキドキ…";
-      badge.textContent = "結果";
-      revealText.textContent = "";
-    }
+    // 色＆粒子
+    setGlow(rank);
+    makeParticles(rank);
+    tick();
 
-    btn.onclick = async () => {
-      if (ctx.state !== "running") await ctx.resume();
+    chestLabel.textContent = 'OPEN!';
+    rankText.textContent = rankLabel(rank);
+    cardName.textContent = name || '';
+    debugText.textContent = debug || '';
 
-      btn.disabled = true;
-      resetOverlay();
-      showOverlay();
+    result.classList.add('show');
+    againBtn.style.opacity = 1;
+    againBtn.style.pointerEvents = 'auto';
+  }
 
-      // 1) 暗転＆宝箱登場 → ドンドン（3回）
-      chest.classList.add("shake");
-      sub.textContent = "どん…どん…どん…";
-      let count = 0;
-      const interval = setInterval(()=>{
-        don();
-        count++;
-        if(count >= 3){
-          clearInterval(interval);
+  // 本番：Firebase callable openOripa
+  async function drawFromFirebase(){
+    await ensureAnonLogin();
+    const openOripa = functions.httpsCallable('openOripa');
+    const res = await openOripa({ oripaId: "oripa_001" });
+    const data = res.data || {};
+    const rank = (data.rank || 'LOSE').toUpperCase();
+    return { rank, name: data.cardName || '', debug: '' };
+  }
 
-          // 2) 開く
-          chest.classList.remove("shake");
-          sub.textContent = "いくよ…オープン！";
-          openSound();
-          flash.classList.add("on");
-          setTimeout(()=>flash.classList.remove("on"), 450);
+  // 演出テスト：ローカルでランダム
+  async function drawLocal(){
+    await new Promise(r=>setTimeout(r, 350));
+    const r = Math.random();
+    const rank = r < 0.01 ? 'SS' : r < 0.05 ? 'S' : r < 0.20 ? 'A' : 'LOSE';
+    return { rank, name: 'デモカード', debug: '(ローカル抽選)' };
+  }
 
-          chest.classList.add("open");
+  drawBtn.addEventListener('click', async ()=>{
+    drawBtn.disabled = true;
+    try { await playSequence(drawFromFirebase); }
+    catch(e){ alert('Firebase設定かFunctionsが未設定: ' + (e?.message || e)); }
+    finally { drawBtn.disabled = false; }
+  });
 
-          // 3) 結果を表示
-          setTimeout(()=>{
-            const p = drawPrize();
+  openStageBtn.addEventListener('click', ()=> playSequence(drawLocal));
 
-            // オーバーレイ内
-            setRevealClass(p.key);
-            revealText.textContent = p.name;
-            badge.textContent = "結果";
-            reveal.classList.add("show");
-            resultSound(p.key);
+  closeBtn.addEventListener('click', ()=>{
+    modal.classList.remove('show');
+    resetStage();
+  });
 
-            // メイン画面にも反映
-            setMainResultClass(p.key);
-            result.textContent = p.name;
-
-            sub.textContent = "結果はこちら！";
-            closeBtn.style.display = "block";
-            btn.disabled = false;
-          }, 900);
-        }
-      }, 420);
-    };
-
-    closeBtn.onclick = () => {
-      hideOverlay();
-    };
-
-    // オーバーレイ外クリックで閉じない（誤タップ防止）
-  </script>
+  againBtn.addEventListener('click', ()=> playSequence(drawFromFirebase));
+</script>
 </body>
 </html>
+
